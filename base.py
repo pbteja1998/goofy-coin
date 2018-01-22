@@ -111,6 +111,23 @@ class Transaction(object):
         self.trx_hash = self.hash_data(self.trx_message)
         self.trx_signature = sender.sign_data(self.trx_hash)
 
+    def verify_sign(self):
+        '''
+            Verifies with a public key from whom the data came that it was indeed
+            signed by their private key
+            param: public_key
+            param: signature String signature to be verified
+            return: Boolean. True if the signature is valid; False otherwise.
+        '''
+        from Crypto.PublicKey import RSA
+        from Crypto.Signature import PKCS1_v1_5
+        from base64 import b64decode
+        rsakey = RSA.importKey(self.sender)
+        signer = PKCS1_v1_5.new(rsakey)
+        if signer.verify(self.trx_hash, b64decode(self.trx_signature)):
+            return True
+        return False
+
 class BlockChain(object):
     """All Goofy Block Chain related methods are in this class"""
 
@@ -221,6 +238,10 @@ class BlockChain(object):
         partial_trx_break = -1
         for i in range(len(self.ledger)-1, -1, -1):
             present_trx = self.ledger[i]
+            if not present_trx.verify_sign():
+                print "MALICIOUS TRANSACTION FOUND"
+                return [], -2
+
             if present_trx.receiver == sender.public_key and not present_trx.spent:
                 if number_of_coins >= present_trx.trx_value:
                     complete_trx_break.append(i)
