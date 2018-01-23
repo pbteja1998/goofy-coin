@@ -97,19 +97,24 @@ class Transaction(object):
         hashed_data.update(b64decode(data))
         return hashed_data
 
-    def create_trx(self, sender, receiver, trx_value):
+    def create_trx(self, sender_pk, receiver_pk, trx_value):
         '''
             param: sender Public Key of the user who is paying
             param: receiver Public Key of the user who is being paid
             param: trx_value Number of Goofy coins that are being transacted
             param: private_key Private Key of the user who is paying
         '''
-        self.sender = sender.public_key
-        self.receiver = receiver.public_key
+        self.sender = sender_pk
+        self.receiver = receiver_pk
         self.trx_value = trx_value
         self.set_trx_message()
         self.trx_hash = self.hash_data(self.trx_message)
-        self.trx_signature = sender.sign_data(self.trx_hash)
+        return self.trx_hash
+        # self.trx_signature = sender.sign_data(self.trx_hash)
+
+    def sign_trx(self, signture):
+        """ Sender signs the transaction """
+        self.trx_signature = signture
 
     def verify_sign(self):
         '''
@@ -184,9 +189,7 @@ class BlockChain(object):
             Takes valid user input
             return: id of the user
         '''
-
-        print "select one of the node: ( ",
-
+        print " ( ",
         for i in range(0, len(self.nodes)):
             if i == len(self.nodes) - 1:
                 print i, " => ", self.nodes[i].username, " ) : ",
@@ -210,7 +213,7 @@ class BlockChain(object):
 
         trx_type = TRX_TYPE_CREATE_COINS
 
-        trx = Transaction(len(self.ledger) + 1, trx_type, len(self.nodes)-1, -1)
+        trx = Transaction(len(self.ledger), trx_type, len(self.nodes)-1, -1)
 
         print "number of coins to be created: (input only an integer) : ",
         try:
@@ -221,7 +224,9 @@ class BlockChain(object):
             print "INVALID INPUT"
             return
 
-        trx.create_trx(self.goofy, self.goofy, number_of_coins)
+        trx_hash = trx.create_trx(self.goofy.public_key, self.goofy.public_key, number_of_coins)
+        signature = self.goofy.sign_data(trx_hash)
+        trx.sign_trx(signature)
         self.ledger.append(trx)
         self.latest_trx = trx
         print str(number_of_coins) + " coins have been created by Goofy"
@@ -259,8 +264,10 @@ class BlockChain(object):
         """ Atomic Transaction => Complete breaking of one trx and complete forming of other trx """
 
         trx_type = TRX_TYPE_PAY_COINS
-        trx = Transaction(len(self.ledger) + 1, trx_type, len(self.ledger)-1, break_trx)
-        trx.create_trx(sender, receiver, number_of_coins)
+        trx = Transaction(len(self.ledger), trx_type, len(self.ledger)-1, break_trx)
+        trx_hash = trx.create_trx(sender.public_key, receiver.public_key, number_of_coins)
+        signature = sender.sign_data(trx_hash)
+        trx.sign_trx(signature)
         self.ledger.append(trx)
         self.latest_trx = trx
         print str(sender.username) + " paid " + \
@@ -273,9 +280,9 @@ class BlockChain(object):
             print "Ledger is empty, You can not make payment transaction"
             return
         
-        print "Who is the Sender ?"
+        print "Select Sender",
         sender = self.user_input()
-        print "Who is the Receiver ?"
+        print "Select Receiver",
         receiver = self.user_input()
         print "number of coins to be sent: (input only an integer) : ",
         try:
@@ -283,6 +290,7 @@ class BlockChain(object):
             [complete_trx_break, partial_trx_break] = self.get_trxs_to_break(self.nodes[sender], number_of_coins)
 
             if partial_trx_break == -2:
+                print ""
                 print "INVALID TRANSACTION"
                 print str(self.nodes[sender].username) + " does not have " + str(number_of_coins) + " number of coins"
                 return
@@ -338,7 +346,7 @@ class BlockChain(object):
             if trx.trx_type == TRX_TYPE_PAY_COINS:
                 print "#" + str(trx.trx_id) + " " + str(self.get_username(trx.sender)) + " paid " + \
                     str(self.get_username(trx.receiver)) + " " + str(trx.trx_value) + \
-                    " coins at " + str(trx.trx_timestamp)
+                    " coins at " + str(trx.trx_timestamp) + " -----back_pointer_to----> #" + str(trx.break_trx)
 
             elif trx.trx_type == TRX_TYPE_CREATE_COINS:
                 print "#" + str(trx.trx_id) + " " + str(self.get_username(trx.sender)) + " created " + \
@@ -355,6 +363,7 @@ if __name__ == '__main__':
         print '                3 => Create Payment Transaction'
         print '                4 => Show Existing Nodes'
         print '                5 => Show Ledger in the human readable format'
+        print '                6 => Exit'
 
         print 'Your Option: ',
         COMMAND = input()
@@ -374,6 +383,9 @@ if __name__ == '__main__':
 
         elif int(COMMAND) == 5:
             GOOFY_CHAIN.show_ledger()
+
+        elif int(COMMAND) == 6:
+            break
 
         else:
             print "INVALID INPUT"
